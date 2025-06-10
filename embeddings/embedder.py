@@ -21,14 +21,14 @@ class TextEmbedder:
             return np.array([])
         
         if self.use_openai:
-            batch_size = 1000  # Increased batch size for faster embedding if API quota allows
+            batch_size = 10  # Increased batch size for faster embedding if API quota allows
             embeddings = []
             total = len(text_list)
             for i in range(0, total, batch_size):
                 batch = text_list[i:i+batch_size]
                 response = self.openai.embeddings.create(
                     input=batch,
-                    =self.openai_model
+                    model=self.openai_model
                 )
                 batch_embeddings = [np.array(d.embedding) for d in response.data]
                 embeddings.extend(batch_embeddings)

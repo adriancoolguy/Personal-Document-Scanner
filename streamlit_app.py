@@ -6,6 +6,7 @@ from pathlib import Path
 from data_loader import load_data, scan_for_files
 from embeddings.vector_store import VectorStore
 import openai
+from datetime import datetime, date
 
 # Constants
 CACHE_DIR = Path.home() / ".personal_document_scanner"
@@ -23,10 +24,15 @@ def load_cached_embeddings():
             return json.load(f)
     return None
 
+def default_serializer(obj):
+    if isinstance(obj, (datetime, date)):
+        return obj.isoformat()
+    return str(obj)
+
 def save_embeddings(embeddings_data):
     """Save embeddings to cache."""
     with open(EMBEDDINGS_CACHE, 'w') as f:
-        json.dump(embeddings_data, f)
+        json.dump(embeddings_data, f, default=default_serializer)
 
 def get_file_metadata():
     """Get metadata about scanned files."""
@@ -68,7 +74,7 @@ Please provide a clear, concise answer based only on the data provided."""
 
     # Get GPT's response
     response = openai.chat.completions.create(
-        model="gpt-3.5-turbo-instruct",
+        model="gpt-3.5-turbo",
         messages=[
             {"role": "system", "content": "You are a helpful assistant that provides accurate answers based on document content."},
             {"role": "user", "content": prompt}
@@ -196,6 +202,7 @@ elif not st.session_state.indexing_complete:
                         original_rows = []
                         for _, row in combined_df.iterrows():
                             row_text = ", ".join([f"{col}: {val}" for col, val in row.items()])
+                            row_text = row_text[:300]  # Truncate to 300 characters
                             text_chunks.append(row_text)
                             original_rows.append(row.to_dict())
                         st.write("DEBUG: Building index...")
@@ -217,7 +224,7 @@ elif not st.session_state.indexing_complete:
                         save_file_metadata(file_metadata)
                         st.success(f"Successfully indexed {len(files)} files!")
                         st.session_state.indexing_complete = True
-                        st.experimental_rerun()
+                        st.rerun()
                     else:
                         st.error("No data could be loaded from the found files.")
             except Exception as e:
@@ -234,7 +241,7 @@ elif not st.session_state.indexing_complete:
             st.session_state.vector_store = vector_store
             st.session_state.indexing_complete = True
             st.success("Loaded cached embeddings!")
-            st.experimental_rerun()
+            st.rerun()
     else:
         st.info("Please enter your OpenAI API key to begin.")
 else:
