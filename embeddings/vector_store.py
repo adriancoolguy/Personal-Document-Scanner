@@ -1,52 +1,51 @@
 import numpy as np
-from typing import List, Dict, Tuple, Optional
-from .embedder import TextEmbedder
-from sklearn.neighbors import NearestNeighbors
+from sentence_transformers import SentenceTransformer
+from sklearn.metrics.pairwise import cosine_similarity
+from typing import List, Tuple, Dict, Any, Optional
 
 class VectorStore:
-    def __init__(self, api_key: str):
-        """Initialize the vector store with FAISS index and text embedder."""
-        self.embedder = TextEmbedder(api_key=api_key)
-        self.nn = None
+    def __init__(self, model: Optional[SentenceTransformer] = None):
+        """Initialize the vector store with an optional pre-loaded model."""
+        self.model = model
         self.embeddings = None
-        self.text_chunks = []
-        self.original_rows = []
-    
-    def build_index(self, text_chunks: List[str], original_rows: List[Dict], progress_callback=None) -> None:
-        """Build index from text chunks and store original rows."""
-        if not text_chunks:
-            raise ValueError("No text chunks provided")
-        if progress_callback:
-            progress_callback(0, len(text_chunks), "Starting embedding generation...")
-        embeddings = self.embedder.get_embeddings(
-            text_chunks,
-            progress_callback=(lambda done, total: progress_callback(done, total, "Embedding...") if progress_callback else None)
-        )
-        if progress_callback:
-            progress_callback(len(text_chunks), len(text_chunks), "Fitting NearestNeighbors index...")
-        self.nn = NearestNeighbors(n_neighbors=5, metric='euclidean')
-        self.nn.fit(embeddings)
-        self.embeddings = embeddings
-        self.text_chunks = text_chunks
-        self.original_rows = original_rows
-        if progress_callback:
-            progress_callback(len(text_chunks), len(text_chunks), "Index built!")
-    
-    def query(self, question: str, top_k: int = 5) -> List[Tuple[Dict, float]]:
-        """Query the index with a question and return top-k matches."""
-        if self.nn is None or self.embeddings is None:
-            raise ValueError("Index not built. Call build_index first.")
+        self.original_data = None
         
-        # Get question embedding
-        question_embedding = self.embedder.get_embeddings([question])[0].reshape(1, -1)
+    def build_index(self, texts: List[str], original_data: List[Dict[str, Any]]) -> None:
+        """Build the search index from texts and their corresponding data."""
+        if self.model is None:
+            raise ValueError("Model must be initialized before building index")
+            
+        # Get embeddings for all texts
+        self.embeddings = self.model.encode(texts, show_progress_bar=False)
+        self.original_data = original_data
         
-        # Search the index
-        distances, indices = self.nn.kneighbors(question_embedding, n_neighbors=top_k)
+    def query(self, query: str, top_k: int = 5) -> List[Tuple[Dict[str, Any], float]]:
+        """Query the index and return the most similar items with their scores."""
+        if self.embeddings is None or self.original_data is None:
+            raise ValueError("Index must be built before querying")
+            
+        # Get query embedding
+        query_embedding = self.model.encode([query], show_progress_bar=False)[0]
         
-        # Return results with original rows and distances
+        # Calculate similarities
+        similarities = cosine_similarity([query_embedding], self.embeddings)[0]
+        
+        # Get top k results
+        top_indices = np.argsort(similarities)[-top_k:][::-1]
+        
+        # Return results with scores
         results = []
-        for idx, distance in zip(indices[0], distances[0]):
-            if idx < len(self.original_rows):  # Ensure index is valid
-                results.append((self.original_rows[idx], float(distance)))
-        
-        return results 
+        for idx in top_indices:
+            score = float(similarities[idx])  # Convert to float for JSON serialization
+            results.append((self.original_data[idx], score))
+            
+        return results
+
+    def get_embeddings(self) -> Optional[np.ndarray]:
+        """Get the current embeddings for caching."""
+        return self.embeddings
+
+    def set_embeddings(self, embeddings: np.ndarray, original_data: List[Dict[str, Any]]) -> None:
+        """Set embeddings and original data from cache."""
+        self.embeddings = embeddings
+        self.original_data = original_data 

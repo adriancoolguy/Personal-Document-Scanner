@@ -1,8 +1,10 @@
-pandas>=2.0.0
-streamlit>=1.30.0
-openpyxl>=3.1.0  # For Excel file support
-xlrd>=2.0.1      # For .xls file support
-sentence-transformers>=2.2.2
-scikit-learn>=1.0.0
+streamlit>=1.24.0
+pandas>=1.5.0
+numpy>=1.21.0
 openai>=1.0.0
-tqdm>=4.65.0     # For progress bars 
+openpyxl>=3.0.0
+xlrd>=2.0.0
+python-dotenv>=0.19.0
+tqdm>=4.65.0     # For progress bars
+scikit-learn>=1.0.0
+torch>=2.0.0     # Required by sentence-transformers 
